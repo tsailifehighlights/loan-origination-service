@@ -1,0 +1,132 @@
+# .github/workflows/postman-onboard-loan-origination.yml
+#
+# Postman Onboarding Workflow — Loan Origination Service
+# =======================================================
+# Adapted from postman-onboard-payment-refund.yml.
+# See the diff table in the repo README for a full breakdown of what changed.
+#
+# Key differences vs payment-refund-service:
+#   - Domain: lending (vs payments), domain-code: LOAN (vs PAY)
+#   - Auth: JWT only — no OAuth2 (spec declares only JWT security scheme)
+#   - Environments: prod + staging + dev (all 3 from spec; payment had prod + uat)
+#   - Server URLs: lending-api.example.com (vs api.payments.example.com)
+#   - Governance group: Lending Platform (vs Payments Platform)
+#   - Repo: loan-origination-service (vs payment-refund-service)
+#
+# ─── ASSUMPTIONS (change if needed) ─────────────────────────────────────────
+#   - Environments onboarded: prod + staging + dev (all 3 from spec)
+#   - domain-code: LOAN
+#   - Governance group name: "Lending Platform" — must exist in Postman Admin
+#     Console or the governance warning will appear (same as payment service)
+#   - requester-email and workspace-admin-user-ids are the same as the payment
+#     service since this is the same Postman account. Update if different.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# ─── REQUIRED SECRETS (same as payment-refund-service repo) ──────────────────
+#   POSTMAN_API_KEY        — Postman API key (PMAK-...)
+#   POSTMAN_ACCESS_TOKEN   — Session token (expires; governance skipped if missing)
+#   GH_FALLBACK_TOKEN      — GitHub PAT with repo + workflow scopes
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Postman Onboarding — Loan Origination Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'specs/loan-origination-api-openapi.yaml'
+      - '.github/workflows/postman-onboard-loan-origination.yml'
+
+  workflow_dispatch:
+    inputs:
+      force_recreate:
+        description: 'Force recreation of workspace/collections (ignores saved IDs)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  onboard-loan-origination:
+    name: Onboard Loan Origination API to Postman
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Onboard Loan Origination API
+        uses: postman-cs/postman-api-onboarding-action@v0
+        with:
+          # ── Service identity ──────────────────────────────────────────────
+          # CHANGED: project-name, domain, domain-code vs payment-refund-service
+          project-name: loan-origination-service
+          domain: lending
+          domain-code: LOAN
+
+          # ── Existing resource IDs (populated after first run) ─────────────
+          # Same pattern as payment-refund-service: repo variables are written
+          # by the action after the first run and fed back in on subsequent
+          # runs to prevent duplicate workspace/collection creation.
+          workspace-id: ${{ inputs.force_recreate != 'true' && vars.POSTMAN_WORKSPACE_ID || '' }}
+          spec-id: ${{ inputs.force_recreate != 'true' && vars.POSTMAN_SPEC_UID || '' }}
+          baseline-collection-id: ${{ inputs.force_recreate != 'true' && vars.POSTMAN_BASELINE_COLLECTION_UID || '' }}
+          smoke-collection-id: ${{ inputs.force_recreate != 'true' && vars.POSTMAN_SMOKE_COLLECTION_UID || '' }}
+          contract-collection-id: ${{ inputs.force_recreate != 'true' && vars.POSTMAN_CONTRACT_COLLECTION_UID || '' }}
+          environment-uids-json: ${{ inputs.force_recreate != 'true' && vars.POSTMAN_ENV_UIDS_JSON || '{}' }}
+
+          # ── Ownership ─────────────────────────────────────────────────────
+          # UNCHANGED: same Postman account as payment-refund-service
+          requester-email: andrew.sd.tsai@gmail.com
+          workspace-admin-user-ids: "53049599"
+
+          # ── Spec location ─────────────────────────────────────────────────
+          # CHANGED: points to loan-origination-service repo and spec filename
+          spec-url: https://raw.githubusercontent.com/tsailifehighlights/loan-origination-service/main/specs/loan-origination-api-openapi.yaml
+
+          # ── Environments ──────────────────────────────────────────────────
+          # CHANGED: all 3 environments from the loan origination spec
+          # (prod, staging, dev vs prod + uat in payment-refund-service)
+          environments-json: '["prod","staging","dev"]'
+
+          # CHANGED: URLs from loan origination spec servers block
+          # (lending-api.example.com vs api.payments.example.com)
+          env-runtime-urls-json: >-
+            {
+              "prod":    "https://lending-api.example.com/v1",
+              "staging": "https://lending-api-staging.example.com/v1",
+              "dev":     "https://lending-api-dev.example.com/v1"
+            }
+
+          # UNCHANGED: no system environments configured in this Postman org
+          system-env-map-json: >-
+            {
+              "prod":    "",
+              "staging": "",
+              "dev":     ""
+            }
+
+          # CHANGED: governance group name reflects lending domain
+          # ⚠ This group must exist in Postman Admin Console or a 404 warning
+          # will appear (same behaviour as payment-refund-service).
+          governance-mapping-json: '{"lending":"Lending Platform"}'
+
+          # ── Auth note (informational) ─────────────────────────────────────
+          # CHANGED: this spec declares JWT only (no OAuth2).
+          # The payment-refund-service had both OAuth2 + JWT security schemes.
+          # The action will scaffold a single {{bearerToken}} placeholder in
+          # the generated environments. mTLS (service-to-service auth described
+          # in the spec) cannot be configured via Postman environment variables
+          # — it requires certificate configuration at the Postman client level
+          # or via the Postman vault. This is a manual step for the platform team.
+          # ─────────────────────────────────────────────────────────────────
+
+          # ── Authentication ────────────────────────────────────────────────
+          postman-api-key: ${{ secrets.POSTMAN_API_KEY }}
+          postman-access-token: ${{ secrets.POSTMAN_ACCESS_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-fallback-token: ${{ secrets.GH_FALLBACK_TOKEN }}
