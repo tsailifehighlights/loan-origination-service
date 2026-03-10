@@ -1,0 +1,5 @@
+workspace:
+  id: ef72e8bb-2f3d-4441-9650-bf472acc2d8b
+localResources:
+  specs:
+    - ../index.yaml
